@@ -1,49 +1,55 @@
-version: "3.9"
+version: "3.9"   # Docker Compose file format version
 
+# =======================
+# SERVICES (Containers)
+# =======================
 services:
+
   # =======================
-  # MySQL (Student DB)
+  # MySQL – Student Database
   # =======================
   mysql:
-    image: mysql:8.0
-    container_name: mysql
-    restart: always
+    image: mysql:8.0              # Pull official MySQL 8 image from Docker Hub
+    container_name: mysql         # Explicit container name (no auto prefix)
+    restart: always               # Restart container if it crashes
 
-    environment:
+    environment:                  # Environment variables passed to MySQL
       MYSQL_ROOT_PASSWORD: rootpass
       MYSQL_DATABASE: school_student
       MYSQL_USER: student_user
       MYSQL_PASSWORD: student_pass
 
     volumes:
-      - mysql_data:/var/lib/mysql
+      - mysql_data:/var/lib/mysql # Named volume for DB persistence
       - ./student-service/db:/docker-entrypoint-initdb.d
+                                  # Init SQL scripts from host
 
-    healthcheck:
+    healthcheck:                  # Check if MySQL is ready
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 5
 
     networks:
-      - school-net
+      - school-net                # Attach container to custom bridge network
 
 
   # =======================
-  # Student Service (Flask)
+  # Student Service (Flask API)
   # =======================
   student-service:
-    build: ./student-service
+    image: school/student-service:1.0  # Custom image name (controlled)
+    build: ./student-service           # Build image from this directory
     container_name: student-service
     restart: always
 
-    environment:
-      DB_HOST: mysql
+    environment:                  # DB connection config
+      DB_HOST: mysql              # Uses service name as DNS
       DB_USER: student_user
       DB_PASSWORD: student_pass
       DB_NAME: school_student
 
-    depends_on:
+    depends_on:                   # Start only after MySQL is healthy
       mysql:
         condition: service_healthy
 
@@ -52,7 +58,7 @@ services:
 
 
   # =======================
-  # PostgreSQL (Teacher DB)
+  # PostgreSQL – Teacher Database
   # =======================
   postgres:
     image: postgres:16
@@ -66,7 +72,9 @@ services:
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
+                                  # Persistent PostgreSQL data
       - ./teacher-service/db:/docker-entrypoint-initdb.d
+                                  # Init scripts
 
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U teacher_user -d school"]
@@ -79,9 +87,10 @@ services:
 
 
   # =======================
-  # Teacher Service (Node.js)
+  # Teacher Service (Node.js API)
   # =======================
   teacher-service:
+    image: school/teacher-service:1.0
     build: ./teacher-service
     container_name: teacher-service
     restart: always
@@ -101,7 +110,7 @@ services:
 
 
   # =======================
-  # MongoDB (Score DB)
+  # MongoDB – Score Database
   # =======================
   mongodb:
     image: mongo:7
@@ -109,7 +118,7 @@ services:
     restart: always
 
     volumes:
-      - mongo_data:/data/db
+      - mongo_data:/data/db        # MongoDB persistent storage
 
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.runCommand('ping')"]
@@ -125,6 +134,7 @@ services:
   # Score Service (Spring Boot)
   # =======================
   score-service:
+    image: school/score-service:1.0
     build: ./score-service
     container_name: score-service
     restart: always
@@ -138,15 +148,16 @@ services:
 
 
   # =======================
-  # Frontend (React DEV SERVER)
+  # Frontend (React)
   # =======================
   frontend:
+    image: school/frontend:1.0
     build: ./frontend
     container_name: frontend
     restart: always
 
     ports:
-      - "3000:80"
+      - "3000:80"                  # Host 3000 → Container 80
 
     depends_on:
       - student-service
@@ -158,18 +169,24 @@ services:
 
 
 # =======================
-# Volumes
+# VOLUMES (Persistent Data)
 # =======================
 volumes:
   mysql_data:
+    name: school_mysql_data        # Explicit volume name
+
   postgres_data:
+    name: school_postgres_data
+
   mongo_data:
+    name: school_mongo_data
 
 
 # =======================
-# Network
+# NETWORKS
 # =======================
 networks:
   school-net:
+    name: school_network           # Explicit network name
     driver: bridge
 
