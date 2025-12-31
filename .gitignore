@@ -1,0 +1,20 @@
+# Node
+node_modules/
+npm-debug.log
+
+# Java / Spring
+target/
+*.class
+
+# Env files
+.env
+.env.*
+
+# Docker
+*.log
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+

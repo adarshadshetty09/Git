@@ -1,0 +1,175 @@
+version: "3.9"
+
+services:
+  # =======================
+  # MySQL (Student DB)
+  # =======================
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: always
+
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: school_student
+      MYSQL_USER: student_user
+      MYSQL_PASSWORD: student_pass
+
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./student-service/db:/docker-entrypoint-initdb.d
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - school-net
+
+
+  # =======================
+  # Student Service (Flask)
+  # =======================
+  student-service:
+    build: ./student-service
+    container_name: student-service
+    restart: always
+
+    environment:
+      DB_HOST: mysql
+      DB_USER: student_user
+      DB_PASSWORD: student_pass
+      DB_NAME: school_student
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    networks:
+      - school-net
+
+
+  # =======================
+  # PostgreSQL (Teacher DB)
+  # =======================
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    restart: always
+
+    environment:
+      POSTGRES_USER: teacher_user
+      POSTGRES_PASSWORD: teacher_pass
+      POSTGRES_DB: school
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./teacher-service/db:/docker-entrypoint-initdb.d
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teacher_user -d school"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - school-net
+
+
+  # =======================
+  # Teacher Service (Node.js)
+  # =======================
+  teacher-service:
+    build: ./teacher-service
+    container_name: teacher-service
+    restart: always
+
+    environment:
+      DB_HOST: postgres
+      DB_USER: teacher_user
+      DB_PASSWORD: teacher_pass
+      DB_NAME: school
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    networks:
+      - school-net
+
+
+  # =======================
+  # MongoDB (Score DB)
+  # =======================
+  mongodb:
+    image: mongo:7
+    container_name: mongodb
+    restart: always
+
+    volumes:
+      - mongo_data:/data/db
+
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - school-net
+
+
+  # =======================
+  # Score Service (Spring Boot)
+  # =======================
+  score-service:
+    build: ./score-service
+    container_name: score-service
+    restart: always
+
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+    networks:
+      - school-net
+
+
+  # =======================
+  # Frontend (React DEV SERVER)
+  # =======================
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    restart: always
+
+    ports:
+      - "3000:80"
+
+    depends_on:
+      - student-service
+      - teacher-service
+      - score-service
+
+    networks:
+      - school-net
+
+
+# =======================
+# Volumes
+# =======================
+volumes:
+  mysql_data:
+  postgres_data:
+  mongo_data:
+
+
+# =======================
+# Network
+# =======================
+networks:
+  school-net:
+    driver: bridge
+
